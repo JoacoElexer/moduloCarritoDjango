@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Carrito</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'listaProductos.css' %}">
+</head>
+<body class="dark">
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h2>Tu Carrito</h2>
+        <a class="cart-btn" href="{% url 'lista_productos' %}">← Volver a productos</a>
+      </div>
+
+      {% if carrito and carrito.items.all %}
+        <div class="items">
+          {% for item in carrito.items.all %}
+            <div class="item">
+              {% if item.producto.imagen %}
+                <img src="{{ item.producto.imagen }}" alt="{{ item.producto.nombre }}">
+              {% else %}
+                <img src="https://via.placeholder.com/64x64?text=IMG" alt="Imagen">
+              {% endif %}
+              <div>
+                <h3>{{ item.producto.nombre }}</h3>
+                <div class="meta">
+                  Precio: $ {{ item.producto.precio }} • Cantidad: {{ item.cantidad }}
+                </div>
+              </div>
+              <div class="meta">
+                Subtotal: $ {{ item.producto.precio|floatformat:2 }}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="summary">
+          <div>Descuentos aplicados: {{ carrito.descuentos.count }}</div>
+          <div class="total">Total: $ {{ carrito.precio_total }}</div>
+        </div>
+      {% else %}
+        <p class="error">Tu carrito está vacío.</p>
+        <div class="cart-actions">
+          <a class="cart-btn" href="{% url 'lista_productos' %}">Explorar productos</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

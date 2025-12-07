@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Productos</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'listaProductos.css' %}">
+</head>
+
+<body class="dark">
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h2>Lista de Productos</h2>
+        <a class="cart-btn" href="{% url 'carrito_view' %}">🛒 Carrito</a>
+      </div>
+
+      {% if productos %}
+        <div class="products">
+          {% for p in productos %}
+            <div class="product" data-product-id="{{ p.id }}">
+              {% if p.imagen %}
+                <img src="{{ p.imagen }}" alt="{{ p.nombre }}">
+              {% endif %}
+              <h3>{{ p.nombre }}</h3>
+              <div class="price">$ {{ p.precio }}</div>
+              <div class="stock">Stock: {{ p.stock }}</div>
+
+              <div class="add-row">
+                <input
+                  type="number"
+                  class="qty-input"
+                  min="1"
+                  max="{{ p.stock }}"
+                  value="1"
+                  aria-label="Cantidad">
+                <button type="button" class="add-btn">Agregar</button>
+              </div>
+              <p class="add-msg" aria-live="polite"></p>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="error">No hay productos disponibles.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Inyección segura de carrito_id en JSON con filtro -->
+  {{ carrito_id|default:0|json_script:"carrito-id-data" }}
+
+  <script>
+    const carritoIdLiteral = JSON.parse(document.getElementById('carrito-id-data').textContent);
+    const carritoId = carritoIdLiteral === 0 ? null : carritoIdLiteral;
+
+    const addUrlBase = '/carrito/';
+
+    document.querySelectorAll('.product').forEach(card => {
+      const addBtn = card.querySelector('.add-btn');
+      const qtyInput = card.querySelector('.qty-input');
+      const message = card.querySelector('.add-msg');
+      const productoId = card.dataset.productId;
+
+      addBtn.addEventListener('click', async () => {
+        const cantidad = parseInt(qtyInput.value, 10);
+        if (!carritoId) {
+          message.textContent = 'No hay carrito activo.';
+          message.classList.add('msg-error');
+          return;
+        }
+        if (!Number.isFinite(cantidad) || cantidad < 1) {
+          message.textContent = 'Ingresa una cantidad válida.';
+          message.classList.add('msg-error');
+          return;
+        }
+
+        try {
+          const formData = new URLSearchParams();
+          formData.append('producto_id', productoId);
+          formData.append('cantidad', String(cantidad));
+
+          const res = await fetch(`${addUrlBase}${carritoId}/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData.toString()
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          await res.json();
+          message.textContent = 'Agregado al carrito.';
+          message.classList.remove('msg-error');
+          message.classList.add('msg-ok');
+        } catch (err) {
+          message.textContent = 'Error al agregar.';
+          message.classList.remove('msg-ok');
+          message.classList.add('msg-error');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

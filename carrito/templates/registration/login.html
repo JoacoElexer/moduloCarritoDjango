@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'login.css' %}">
+</head>
+<body class="dark">
+          {% if form.errors %}
+    <p class="error">Usuario o contraseña incorrectos.</p>
+  {% endif %}
+
+  {% url 'lista_productos' as lista_url %}
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    {{ form.username.label_tag }}
+    {{ form.username }}
+
+    {{ form.password.label_tag }}
+    {{ form.password }}
+
+    <button type="submit">Entrar</button>
+    <input type="hidden" name="next" value="{{ next|default:lista_url }}">
+  </form>
+
+</div>
+    
+</body>
+</html>
