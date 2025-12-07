@@ -14,4 +14,5 @@ urlpatterns = [
     path('carrito/<int:pk>/', views.CarritoDetailDeleteView.as_view()),
     path('carrito/<int:pk>/item/<int:item_id>/update/', views.CarritoItemUpdateView.as_view()),
     path('carrito/<int:pk>/item/<int:item_id>/delete/', views.CarritoItemDeleteView.as_view()),
+    path('carrito/<int:pk>/aplicar-cupon/', views.CarritoApplyCouponView.as_view()),
 ]

@@ -9,7 +9,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
-
+from django.db.models import Sum
 
 def login_view(request):
     return render(request, 'login/login.html')
@@ -27,6 +27,8 @@ class ProductoListView(LoginRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         carrito = _ensure_user_cart(self.request.user)
         ctx['carrito_id'] = carrito.id
+        cart_count = carrito.items.aggregate(total=Sum('cantidad'))['total'] or 0
+        ctx['cart_count'] = cart_count
         return ctx
 
 @login_required
@@ -34,7 +36,7 @@ def carrito_view(request):
     carrito = Carrito.objects.filter(usuario=request.user).first()
     items_qs = CarritoProducto.objects.filter(carrito=carrito).select_related('producto')
     items = []
-    total = 0.0
+    base_total = 0.0
     for it in items_qs:
         subtotal = it.producto.precio * it.cantidad
         items.append({
@@ -45,18 +47,21 @@ def carrito_view(request):
             'cantidad': it.cantidad,
             'subtotal': subtotal,
         })
-        total += subtotal
+        base_total += subtotal
 
-    # Actualiza precio_total si quieres mantenerlo consistente
+    descuentos_qs = carrito.descuentos.all() if carrito else Descuento.objects.none()
+    total_pct = descuentos_qs.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+    discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
     if carrito:
-        carrito.precio_total = total
+        carrito.precio_total = base_total
         carrito.save(update_fields=['precio_total'])
 
     return render(request, 'carrito.html', {
         'carrito': carrito,
         'items': items,
-        'total': total,
-        'descuentos': list(carrito.descuentos.all()) if carrito else [],
+        'total': discounted_total,
+        'descuentos': list(descuentos_qs),
     })
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -116,7 +121,7 @@ class CarritoListCreateView(View):
 
     def post(self, request):
         return HttpResponseForbidden()
-    
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoItemUpdateView(View):
     @transaction.atomic
@@ -127,7 +132,6 @@ class CarritoItemUpdateView(View):
         if carrito.usuario != request.user:
             return HttpResponseForbidden()
 
-        # Parse new quantity
         try:
             nueva_cantidad = int(request.POST.get('cantidad', '').strip())
         except (TypeError, ValueError):
@@ -137,46 +141,37 @@ class CarritoItemUpdateView(View):
         producto = Producto.objects.select_for_update().get(pk=item.producto_id)
 
         if nueva_cantidad < 1:
-            # Equivalent to delete logic below, but here we treat <1 as remove
             producto.stock += item.cantidad
             producto.save(update_fields=['stock'])
             item.delete()
-            # Recompute total
-            total = 0.0
-            for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
-                total += it.producto.precio * it.cantidad
-            carrito.precio_total = total
-            carrito.save(update_fields=['precio_total'])
-            return JsonResponse({'ok': True, 'removed': True, 'stock_restante': producto.stock, 'total': total})
+        else:
+            delta = nueva_cantidad - item.cantidad
+            if delta > 0:
+                if producto.stock < delta:
+                    return JsonResponse({'error': 'Stock insuficiente', 'stock_disponible': producto.stock}, status=400)
+                producto.stock -= delta
+            elif delta < 0:
+                producto.stock += (-delta)
+            producto.save(update_fields=['stock'])
+            item.cantidad = nueva_cantidad
+            item.save(update_fields=['cantidad'])
 
-        # Determine delta and check stock when increasing
-        delta = nueva_cantidad - item.cantidad
-        if delta > 0:
-            if producto.stock < delta:
-                return JsonResponse({'error': 'Stock insuficiente', 'stock_disponible': producto.stock}, status=400)
-            producto.stock -= delta
-        elif delta < 0:
-            producto.stock += (-delta)
-
-        producto.save(update_fields=['stock'])
-
-        item.cantidad = nueva_cantidad
-        item.save(update_fields=['cantidad'])
-
-        # Recompute total
-        total = 0.0
+        base_total = 0.0
         for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
-            total += it.producto.precio * it.cantidad
-        carrito.precio_total = total
+            base_total += it.producto.precio * it.cantidad
+        carrito.precio_total = base_total
         carrito.save(update_fields=['precio_total'])
+
+        total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
 
         return JsonResponse({
             'ok': True,
             'item_id': item.id,
-            'cantidad': item.cantidad,
+            'cantidad': item.cantidad if nueva_cantidad >= 1 else 0,
             'stock_restante': producto.stock,
-            'subtotal': round(producto.precio * item.cantidad, 2),
-            'total': round(total, 2),
+            'subtotal': round(producto.precio * (item.cantidad if nueva_cantidad >= 1 else 0), 2),
+            'total': round(discounted_total, 2),
         })
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -235,14 +230,24 @@ class CarritoDetailDeleteView(View):
         p.stock -= cantidad
         p.save(update_fields=['stock'])
 
+        base_total = 0.0
+        for it in CarritoProducto.objects.filter(carrito=c).select_related('producto'):
+            base_total += it.producto.precio * it.cantidad
+        c.precio_total = base_total
+        c.save(update_fields=['precio_total'])
+
+        total_pct = c.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
         return JsonResponse({
             'ok': True,
             'carrito_id': c.id,
             'producto_id': p.id,
             'cantidad_total': item.cantidad,
-            'stock_restante': p.stock
+            'stock_restante': p.stock,
+            'total': round(discounted_total, 2),
         })
-    
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoItemDeleteView(View):
     @transaction.atomic
@@ -256,17 +261,112 @@ class CarritoItemDeleteView(View):
         item = get_object_or_404(CarritoProducto.objects.select_for_update(), pk=item_id, carrito=carrito)
         producto = Producto.objects.select_for_update().get(pk=item.producto_id)
 
-        # Restore stock fully
         producto.stock += item.cantidad
         producto.save(update_fields=['stock'])
 
         item.delete()
 
-        # Recompute total
-        total = 0.0
+        base_total = 0.0
         for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
-            total += it.producto.precio * it.cantidad
-        carrito.precio_total = total
+            base_total += it.producto.precio * it.cantidad
+        carrito.precio_total = base_total
         carrito.save(update_fields=['precio_total'])
 
-        return JsonResponse({'ok': True, 'deleted': True, 'stock_restante': producto.stock, 'total': round(total, 2)})
+        total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
+        return JsonResponse({'ok': True, 'deleted': True, 'stock_restante': producto.stock, 'total': round(discounted_total, 2)})
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CarritoApplyCouponView(View):
+    @transaction.atomic
+    def post(self, request, pk):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        codigo = (request.POST.get('codigo') or '').strip()
+        if not codigo:
+            return JsonResponse({'error': 'Ingresa un código'}, status=400)
+
+        try:
+            descuento = Descuento.objects.get(codigo__iexact=codigo)
+        except Descuento.DoesNotExist:
+            return JsonResponse({'error': 'Código inválido'}, status=404)
+
+        # Evitar duplicados
+        if carrito.descuentos.filter(pk=descuento.pk).exists():
+            base_total = 0.0
+            for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+                base_total += it.producto.precio * it.cantidad
+            total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+            discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+            descs = list(carrito.descuentos.values('codigo', 'porcentaje'))
+            return JsonResponse({
+                'ok': True,
+                'aplicado': {'codigo': descuento.codigo, 'porcentaje': descuento.porcentaje},
+                'descuentos': descs,
+                'base_total': round(base_total, 2),
+                'total': round(discounted_total, 2)
+            })
+
+        carrito.descuentos.add(descuento)
+
+        base_total = 0.0
+        for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+            base_total += it.producto.precio * it.cantidad
+
+        total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
+        carrito.precio_total = base_total
+        carrito.save(update_fields=['precio_total'])
+
+        descs = list(carrito.descuentos.values('codigo', 'porcentaje'))
+        return JsonResponse({
+            'ok': True,
+            'aplicado': {'codigo': descuento.codigo, 'porcentaje': descuento.porcentaje},
+            'descuentos': descs,
+            'base_total': round(base_total, 2),
+            'total': round(discounted_total, 2)
+        })
+
+    @transaction.atomic
+    def delete(self, request, pk):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        codigo = (request.GET.get('codigo') or '').strip()
+        if not codigo:
+            return JsonResponse({'error': 'Ingresa un código'}, status=400)
+
+        try:
+            descuento = Descuento.objects.get(codigo__iexact=codigo)
+        except Descuento.DoesNotExist:
+            return JsonResponse({'error': 'Código inválido'}, status=404)
+
+        carrito.descuentos.remove(descuento)
+
+        base_total = 0.0
+        for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+            base_total += it.producto.precio * it.cantidad
+
+        total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
+        carrito.precio_total = base_total
+        carrito.save(update_fields=['precio_total'])
+
+        descs = list(carrito.descuentos.values('codigo', 'porcentaje'))
+        return JsonResponse({
+            'ok': True,
+            'removido': {'codigo': descuento.codigo, 'porcentaje': descuento.porcentaje},
+            'descuentos': descs,
+            'base_total': round(base_total, 2),
+            'total': round(discounted_total, 2)
+        })

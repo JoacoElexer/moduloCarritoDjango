@@ -10,40 +10,56 @@
 <body class="dark">
   <div class="container">
     <div class="card">
-      <div class="header">
-        <h2>Lista de Productos</h2>
-        <a class="cart-btn" href="{% url 'carrito_view' %}">🛒 Carrito</a>
-      </div>
-
-      {% if productos %}
-        <div class="products">
-          {% for p in productos %}
-            <div class="product" data-product-id="{{ p.id }}">
-              {% if p.imagen %}
-                <img src="{{ p.imagen }}" alt="{{ p.nombre }}">
-              {% endif %}
-              <h3>{{ p.nombre }}</h3>
-              <div class="price">$ {{ p.precio }}</div>
-              <div class="stock">Stock: <span class="stock-value">{{ p.stock }}</span></div>
-
-              <div class="add-row">
-                <input
-                  type="number"
-                  class="qty-input"
-                  min="1"
-                  max="{{ p.stock }}"
-                  value="1"
-                  aria-label="Cantidad">
-                <button type="button" class="add-btn">Agregar</button>
-              </div>
-              <p class="add-msg" aria-live="polite"></p>
-            </div>
-          {% endfor %}
+        <div class="topbar">
+        <div class="hello">
+          Hola, {{ user.username }}
         </div>
-      {% else %}
-        <p class="error">No hay productos disponibles.</p>
-      {% endif %}
+        <a class="logout-btn" href="{% url 'logout' %}">Cerrar sesión</a>
+      </div>
+        <div class="header">
+    <h2>Lista de Productos</h2>
+    <a class="cart-btn" href="{% url 'carrito_view' %}">🛒 Carrito ({{ cart_count|default:0 }})</a>
+  </div>
+
+  {% if productos %}
+    <div class="products">
+      {% for p in productos %}
+        <div class="product" data-product-id="{{ p.id }}">
+          {% if p.imagen %}
+            <img src="{{ p.imagen }}" alt="{{ p.nombre }}">
+          {% endif %}
+          <h3>{{ p.nombre }}</h3>
+          <div class="price">$ {{ p.precio }}</div>
+          <div class="stock">Stock: <span class="stock-value">{{ p.stock }}</span></div>
+
+          <div class="add-row">
+            <input
+              type="number"
+              class="qty-input"
+              min="1"
+              max="{{ p.stock }}"
+              value="1"
+              aria-label="Cantidad">
+            <button type="button" class="add-btn">Agregar</button>
+          </div>
+          <p class="add-msg" aria-live="polite"></p>
+        </div>
+      {% endfor %}
     </div>
+  {% else %}
+    <p class="error">No hay productos disponibles.</p>
+  {% endif %}
+
+  <!-- Zona de Promoción (Banner) -->
+  <div class="promo-banner">
+  <div class="promo-image">Promo</div>
+  <div class="promo-text">
+    <div class="title">Códigos de Descuento Vigentes</div>
+    <div class="code">Usa el código: <span>PROMO2026</span> para 10% de descuento.</div>
+  </div>
+</div>
+  <!-- Fin Zona de Promoción -->
+</div>
   </div>
 
   {{ carrito_id|default:0|json_script:"carrito-id-data" }}

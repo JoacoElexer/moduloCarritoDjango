@@ -100,6 +100,43 @@ h2 {
   color: var(--text);
 }
 
+/* Coupon section */
+.coupon-section {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-2);
+}
+.coupon-input {
+  width: 200px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-2);
+  background: #141414;
+  color: var(--text);
+  outline: none;
+}
+.coupon-input:focus {
+  border-color: #555;
+  box-shadow: 0 0 0 3px rgba(90,90,90,0.35);
+}
+.coupon-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-2);
+  background: var(--primary);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.coupon-btn:hover { background: var(--primary-hover); }
+.coupon-msg {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.coupon-msg.msg-ok { color: #7dd3fc; }
+.coupon-msg.msg-error { color: #ff6961; }
+
 /* Summary with extra spacing */
 .summary {
   display: grid;
