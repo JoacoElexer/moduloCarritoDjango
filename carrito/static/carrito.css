@@ -1,0 +1,167 @@
+/* Dark layout reusing palette similar to listaProductos */
+:root {
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --surface-2: #2a2a2a;
+  --text: #e6e6e6;
+  --muted: #b3b3b3;
+  --primary: #3a3a3a;
+  --primary-hover: #4a4a4a;
+}
+
+* { box-sizing: border-box; }
+
+body.dark {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+.container {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.cart-btn {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  background: var(--primary);
+  color: var(--text);
+  border: 1px solid var(--surface-2);
+}
+.cart-btn:hover { background: var(--primary-hover); }
+
+/* Items list */
+.items {
+  display: grid;
+  gap: 16px; /* más espacio entre productos */
+  margin-bottom: 24px; /* más espacio antes del resumen */
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 80px 1fr auto; /* imagen fija, info, subtotal */
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.item-img {
+  width: 80px;     /* ancho fijo */
+  height: 80px;    /* alto fijo */
+  object-fit: cover;
+  border-radius: 8px;
+  background: #141414;
+}
+
+.item-info h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.subtotal {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Summary with extra spacing */
+.summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px; /* más espacio entre la sección de descuentos y total */
+  padding-top: 8px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.summary-section h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.total {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #2a1a1a;
+  color: #ff6961;
+  border: 1px solid #402020;
+}
+
+.qty-input {
+  width: 72px;
+  padding: 6px 8px;
+  margin: 0 8px 0 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  outline: none;
+}
+
+.update-btn,
+.remove-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-2);
+  background: var(--primary);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  margin-left: 8px;
+}
+
+.update-btn:hover {
+  background: var(--primary-hover);
+}
+
+/* Danger variant for remove */
+.remove-btn {
+  background: #3a2626;
+  border-color: #4a2f2f;
+}
+.remove-btn:hover {
+  background: #4a2f2f;
+}

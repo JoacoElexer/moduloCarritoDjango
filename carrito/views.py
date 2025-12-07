@@ -8,6 +8,8 @@ from django.views.generic import ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.views.decorators.http import require_http_methods
+
 
 def login_view(request):
     return render(request, 'login/login.html')
@@ -30,7 +32,32 @@ class ProductoListView(LoginRequiredMixin, ListView):
 @login_required
 def carrito_view(request):
     carrito = Carrito.objects.filter(usuario=request.user).first()
-    return render(request, 'carrito.html', {'carrito': carrito})
+    items_qs = CarritoProducto.objects.filter(carrito=carrito).select_related('producto')
+    items = []
+    total = 0.0
+    for it in items_qs:
+        subtotal = it.producto.precio * it.cantidad
+        items.append({
+            'id': it.id,
+            'nombre': it.producto.nombre,
+            'imagen': it.producto.imagen,
+            'precio': it.producto.precio,
+            'cantidad': it.cantidad,
+            'subtotal': subtotal,
+        })
+        total += subtotal
+
+    # Actualiza precio_total si quieres mantenerlo consistente
+    if carrito:
+        carrito.precio_total = total
+        carrito.save(update_fields=['precio_total'])
+
+    return render(request, 'carrito.html', {
+        'carrito': carrito,
+        'items': items,
+        'total': total,
+        'descuentos': list(carrito.descuentos.all()) if carrito else [],
+    })
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductoListCreateView(View):
@@ -89,6 +116,68 @@ class CarritoListCreateView(View):
 
     def post(self, request):
         return HttpResponseForbidden()
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class CarritoItemUpdateView(View):
+    @transaction.atomic
+    def post(self, request, pk, item_id):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        # Parse new quantity
+        try:
+            nueva_cantidad = int(request.POST.get('cantidad', '').strip())
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Cantidad inválida'}, status=400)
+
+        item = get_object_or_404(CarritoProducto.objects.select_for_update(), pk=item_id, carrito=carrito)
+        producto = Producto.objects.select_for_update().get(pk=item.producto_id)
+
+        if nueva_cantidad < 1:
+            # Equivalent to delete logic below, but here we treat <1 as remove
+            producto.stock += item.cantidad
+            producto.save(update_fields=['stock'])
+            item.delete()
+            # Recompute total
+            total = 0.0
+            for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+                total += it.producto.precio * it.cantidad
+            carrito.precio_total = total
+            carrito.save(update_fields=['precio_total'])
+            return JsonResponse({'ok': True, 'removed': True, 'stock_restante': producto.stock, 'total': total})
+
+        # Determine delta and check stock when increasing
+        delta = nueva_cantidad - item.cantidad
+        if delta > 0:
+            if producto.stock < delta:
+                return JsonResponse({'error': 'Stock insuficiente', 'stock_disponible': producto.stock}, status=400)
+            producto.stock -= delta
+        elif delta < 0:
+            producto.stock += (-delta)
+
+        producto.save(update_fields=['stock'])
+
+        item.cantidad = nueva_cantidad
+        item.save(update_fields=['cantidad'])
+
+        # Recompute total
+        total = 0.0
+        for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+            total += it.producto.precio * it.cantidad
+        carrito.precio_total = total
+        carrito.save(update_fields=['precio_total'])
+
+        return JsonResponse({
+            'ok': True,
+            'item_id': item.id,
+            'cantidad': item.cantidad,
+            'stock_restante': producto.stock,
+            'subtotal': round(producto.precio * item.cantidad, 2),
+            'total': round(total, 2),
+        })
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoDetailDeleteView(View):
@@ -128,7 +217,6 @@ class CarritoDetailDeleteView(View):
         if cantidad < 1:
             return JsonResponse({'error': 'Cantidad debe ser >= 1'}, status=400)
 
-        # Bloquea la fila del producto para lectura/escritura consistente
         try:
             p = Producto.objects.select_for_update().get(pk=producto_id)
         except Producto.DoesNotExist:
@@ -144,7 +232,6 @@ class CarritoDetailDeleteView(View):
             item.cantidad += cantidad
             item.save(update_fields=['cantidad'])
 
-        # Descontar stock del producto de forma atómica
         p.stock -= cantidad
         p.save(update_fields=['stock'])
 
@@ -155,3 +242,31 @@ class CarritoDetailDeleteView(View):
             'cantidad_total': item.cantidad,
             'stock_restante': p.stock
         })
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class CarritoItemDeleteView(View):
+    @transaction.atomic
+    def delete(self, request, pk, item_id):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        item = get_object_or_404(CarritoProducto.objects.select_for_update(), pk=item_id, carrito=carrito)
+        producto = Producto.objects.select_for_update().get(pk=item.producto_id)
+
+        # Restore stock fully
+        producto.stock += item.cantidad
+        producto.save(update_fields=['stock'])
+
+        item.delete()
+
+        # Recompute total
+        total = 0.0
+        for it in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+            total += it.producto.precio * it.cantidad
+        carrito.precio_total = total
+        carrito.save(update_fields=['precio_total'])
+
+        return JsonResponse({'ok': True, 'deleted': True, 'stock_restante': producto.stock, 'total': round(total, 2)})

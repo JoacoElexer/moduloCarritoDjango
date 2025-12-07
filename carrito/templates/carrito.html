@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Carrito</title>
   {% load static %}
-  <link rel="stylesheet" href="{% static 'listaProductos.css' %}">
+  <link rel="stylesheet" href="{% static 'carrito.css' %}">
 </head>
 <body class="dark">
   <div class="container">
@@ -14,31 +14,45 @@
         <a class="cart-btn" href="{% url 'lista_productos' %}">← Volver a productos</a>
       </div>
 
-      {% if carrito and carrito.items.all %}
+      {% if items %}
         <div class="items">
-          {% for item in carrito.items.all %}
-            <div class="item">
-              {% if item.producto.imagen %}
-                <img src="{{ item.producto.imagen }}" alt="{{ item.producto.nombre }}">
+          {% for it in items %}
+            <div class="item" data-item-id="{{ it.id }}">
+              {% if it.imagen %}
+                <img class="item-img" src="{{ it.imagen }}" alt="{{ it.nombre }}">
               {% else %}
-                <img src="https://via.placeholder.com/64x64?text=IMG" alt="Imagen">
+                <img class="item-img" src="https://via.placeholder.com/80x80?text=IMG" alt="Imagen">
               {% endif %}
-              <div>
-                <h3>{{ item.producto.nombre }}</h3>
+              <div class="item-info">
+                <h3>{{ it.nombre }}</h3>
                 <div class="meta">
-                  Precio: $ {{ item.producto.precio }} • Cantidad: {{ item.cantidad }}
+                  Precio: $ <span class="price">{{ it.precio }}</span> •
+                  Cantidad:
+                  <input type="number" class="qty-input" min="1" value="{{ it.cantidad }}" style="width:70px;">
+                  <button type="button" class="update-btn">Actualizar</button>
+                  <button type="button" class="remove-btn">Quitar</button>
                 </div>
               </div>
-              <div class="meta">
-                Subtotal: $ {{ item.producto.precio|floatformat:2 }}
+              <div class="subtotal">
+                Subtotal: $ <span class="subtotal-value">{{ it.subtotal|floatformat:2 }}</span>
               </div>
             </div>
           {% endfor %}
         </div>
 
         <div class="summary">
-          <div>Descuentos aplicados: {{ carrito.descuentos.count }}</div>
-          <div class="total">Total: $ {{ carrito.precio_total }}</div>
+          <div class="summary-left">
+            <div class="summary-section">
+              <h4>Descuentos aplicados</h4>
+              <div class="meta">{{ descuentos|length }}</div>
+            </div>
+          </div>
+          <div class="summary-right">
+            <div class="summary-section">
+              <h4>Total</h4>
+              <div class="total">$ <span id="total-value">{{ total|floatformat:2 }}</span></div>
+            </div>
+          </div>
         </div>
       {% else %}
         <p class="error">Tu carrito está vacío.</p>
@@ -48,5 +62,80 @@
       {% endif %}
     </div>
   </div>
+
+  {% if carrito %}
+    {{ carrito.id|json_script:"carrito-id-data" }}
+  {% endif %}
+
+  <script>
+    const carritoIdEl = document.getElementById('carrito-id-data');
+    const carritoId = carritoIdEl ? JSON.parse(carritoIdEl.textContent) : null;
+
+    function format2(n) { return Number(n).toFixed(2); }
+
+    document.querySelectorAll('.item').forEach(itemEl => {
+      const itemId = itemEl.dataset.itemId;
+      const qtyInput = itemEl.querySelector('.qty-input');
+      const updateBtn = itemEl.querySelector('.update-btn');
+      const removeBtn = itemEl.querySelector('.remove-btn');
+      const subtotalEl = itemEl.querySelector('.subtotal-value');
+
+      updateBtn.addEventListener('click', async () => {
+        const nuevaCantidad = parseInt(qtyInput.value, 10);
+        if (!Number.isFinite(nuevaCantidad) || nuevaCantidad < 1) {
+          alert('Cantidad inválida (>=1). Para quitar usa "Quitar".');
+          return;
+        }
+        try {
+          const formData = new URLSearchParams();
+          formData.append('cantidad', String(nuevaCantidad));
+          const res = await fetch(`/carrito/${carritoId}/item/${itemId}/update/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData.toString()
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || `Error ${res.status}`);
+            return;
+          }
+          qtyInput.value = data.cantidad;
+          subtotalEl.textContent = format2(data.subtotal);
+          document.getElementById('total-value').textContent = format2(data.total);
+        } catch (e) {
+          alert('Error al actualizar cantidad.');
+        }
+      });
+
+      removeBtn.addEventListener('click', async () => {
+        if (!confirm('¿Quitar este producto del carrito?')) return;
+        try {
+          const res = await fetch(`/carrito/${carritoId}/item/${itemId}/delete/`, {
+            method: 'DELETE',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || `Error ${res.status}`);
+            return;
+          }
+          itemEl.remove();
+          document.getElementById('total-value').textContent = format2(data.total);
+          // If no items left, show empty state
+          const itemsLeft = document.querySelectorAll('.item').length;
+          if (itemsLeft === 0) {
+            location.reload(); // simplest: reload to show "carrito vacío"
+          }
+        } catch (e) {
+          alert('Error al quitar el producto.');
+        }
+      });
+    });
+  </script>
 </body>
 </html>
