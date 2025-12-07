@@ -7,6 +7,7 @@ from django.utils.decorators import method_decorator
 from django.views.generic import ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 
 def login_view(request):
     return render(request, 'login/login.html')
@@ -81,14 +82,12 @@ class DescuentoDetailDeleteView(View):
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoListCreateView(View):
     def get(self, request):
-        # Solo lista el carrito del usuario autenticado
         if not request.user.is_authenticated:
             return HttpResponseForbidden()
         carrito = _ensure_user_cart(request.user)
         return JsonResponse({'id': carrito.id, 'usuario': request.user.id})
 
     def post(self, request):
-        # No crear carritos arbitrarios; cada usuario tiene uno
         return HttpResponseForbidden()
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -112,6 +111,7 @@ class CarritoDetailDeleteView(View):
         c.delete()
         return JsonResponse({'deleted': True})
 
+    @transaction.atomic
     def post(self, request, pk):
         if not request.user.is_authenticated:
             return HttpResponseForbidden()
@@ -128,7 +128,14 @@ class CarritoDetailDeleteView(View):
         if cantidad < 1:
             return JsonResponse({'error': 'Cantidad debe ser >= 1'}, status=400)
 
-        p = get_object_or_404(Producto, pk=producto_id)
+        # Bloquea la fila del producto para lectura/escritura consistente
+        try:
+            p = Producto.objects.select_for_update().get(pk=producto_id)
+        except Producto.DoesNotExist:
+            return JsonResponse({'error': 'Producto no existe'}, status=404)
+
+        if p.stock < cantidad:
+            return JsonResponse({'error': 'Stock insuficiente', 'stock_disponible': p.stock}, status=400)
 
         item, created = CarritoProducto.objects.get_or_create(
             carrito=c, producto=p, defaults={'cantidad': cantidad}
@@ -137,4 +144,14 @@ class CarritoDetailDeleteView(View):
             item.cantidad += cantidad
             item.save(update_fields=['cantidad'])
 
-        return JsonResponse({'ok': True, 'carrito_id': c.id, 'producto_id': p.id, 'cantidad_total': item.cantidad})
+        # Descontar stock del producto de forma atómica
+        p.stock -= cantidad
+        p.save(update_fields=['stock'])
+
+        return JsonResponse({
+            'ok': True,
+            'carrito_id': c.id,
+            'producto_id': p.id,
+            'cantidad_total': item.cantidad,
+            'stock_restante': p.stock
+        })

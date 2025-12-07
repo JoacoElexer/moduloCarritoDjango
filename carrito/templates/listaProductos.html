@@ -24,7 +24,7 @@
               {% endif %}
               <h3>{{ p.nombre }}</h3>
               <div class="price">$ {{ p.precio }}</div>
-              <div class="stock">Stock: {{ p.stock }}</div>
+              <div class="stock">Stock: <span class="stock-value">{{ p.stock }}</span></div>
 
               <div class="add-row">
                 <input
@@ -46,19 +46,18 @@
     </div>
   </div>
 
-  <!-- Inyección segura de carrito_id en JSON con filtro -->
   {{ carrito_id|default:0|json_script:"carrito-id-data" }}
 
   <script>
     const carritoIdLiteral = JSON.parse(document.getElementById('carrito-id-data').textContent);
     const carritoId = carritoIdLiteral === 0 ? null : carritoIdLiteral;
-
     const addUrlBase = '/carrito/';
 
     document.querySelectorAll('.product').forEach(card => {
       const addBtn = card.querySelector('.add-btn');
       const qtyInput = card.querySelector('.qty-input');
       const message = card.querySelector('.add-msg');
+      const stockValueEl = card.querySelector('.stock-value');
       const productoId = card.dataset.productId;
 
       addBtn.addEventListener('click', async () => {
@@ -88,8 +87,19 @@
             body: formData.toString()
           });
 
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          await res.json();
+          const data = await res.json();
+          if (!res.ok) {
+            message.textContent = data.error || `Error HTTP ${res.status}`;
+            message.classList.remove('msg-ok');
+            message.classList.add('msg-error');
+            return;
+          }
+
+          // Actualiza stock visible en la tarjeta
+          if (typeof data.stock_restante === 'number') {
+            stockValueEl.textContent = String(data.stock_restante);
+          }
+
           message.textContent = 'Agregado al carrito.';
           message.classList.remove('msg-error');
           message.classList.add('msg-ok');
