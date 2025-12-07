@@ -1,2 +1,35 @@
-Usuario: admin
-contraseña: admin
+# 🛒 Módulo Carrito (Django)
+
+Proyecto Django con autenticación y un carrito único por usuario, listado de productos, y operaciones básicas (añadir al carrito con cantidad y control de stock).
+
+## 🔗 Rutas Principales
+
+- `GET /` → Incluye todas las URLs de la app `carrito`.
+- `GET /admin/` → Panel de administración.
+- `GET /accounts/login/` → Login estándar de Django.
+- `POST /accounts/logout/` → Logout estándar de Django.
+
+### App `carrito`
+- Páginas:
+  - `GET /login/` → Vista simple de login (opcional si usas `accounts/login/`).
+  - `GET /listaProductos/` → Lista de productos (requiere login).
+  - `GET /carritoView/` → Vista del carrito del usuario (requiere login).
+
+- Endpoints (REST-like):
+  - `GET|POST /producto/` → Lista/crea productos.
+  - `GET|DELETE /producto/<int:pk>/` → Consulta/elimina un producto.
+  - `GET|POST /descuento/` → Lista/crea descuentos.
+  - `GET|DELETE /descuento/<int:pk>/` → Consulta/elimina un descuento.
+  - `GET /carrito/` → Obtiene el carrito del usuario autenticado.
+  - `GET|POST|DELETE /carrito/<int:pk>/`
+    - `GET` → Detalle del carrito (items, descuentos, total).
+    - `POST` → Agrega ítem con `producto_id` y `cantidad` (valida stock y descuenta).
+    - `DELETE` → Elimina el carrito (solo si pertenece al usuario).
+
+## 👤 Credenciales de prueba
+
+- Usuario: `admin`
+- Contraseña: `admin`
+
+Crear un superusuario:
+python manage.py createsuperuser
