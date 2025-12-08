@@ -11,32 +11,37 @@ from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
 
+# Vista para mostrar la página de inicio de sesión
 def login_view(request):
     return render(request, 'login/login.html')
 
+# Función para asegurar que el usuario tenga un carrito asociado
 def _ensure_user_cart(user):
     carrito, _ = Carrito.objects.get_or_create(usuario=user, defaults={'precio_total': 0})
     return carrito
 
+# Vista para listar los productos disponibles
 class ProductoListView(LoginRequiredMixin, ListView):
     model = Producto
     template_name = 'listaProductos.html'
     context_object_name = 'productos'
 
     def get_context_data(self, **kwargs):
+        # Agregar información adicional al contexto de la vista
         ctx = super().get_context_data(**kwargs)
-        carrito = _ensure_user_cart(self.request.user)
-        ctx['carrito_id'] = carrito.id
-        cart_count = carrito.items.aggregate(total=Sum('cantidad'))['total'] or 0
+        carrito = _ensure_user_cart(self.request.user)  # Obtener el carrito del usuario
+        ctx['carrito_id'] = carrito.id  # ID del carrito
+        cart_count = carrito.items.aggregate(total=Sum('cantidad'))['total'] or 0  # Total de productos en el carrito
         ctx['cart_count'] = cart_count
-        applied_coupons = carrito.descuentos.values_list('id', flat=True)
-        ctx['descuentos'] = Descuento.objects.exclude(id__in=applied_coupons)
+        applied_coupons = carrito.descuentos.values_list('id', flat=True)  # Cupones aplicados
+        ctx['descuentos'] = Descuento.objects.exclude(id__in=applied_coupons)  # Cupones disponibles
         return ctx
 
+# Vista para mostrar el contenido del carrito del usuario
 @login_required
 def carrito_view(request):
-    carrito = Carrito.objects.filter(usuario=request.user).first()
-    items_qs = CarritoProducto.objects.filter(carrito=carrito).select_related('producto')
+    carrito = Carrito.objects.filter(usuario=request.user).first()  # Obtener el carrito del usuario
+    items_qs = CarritoProducto.objects.filter(carrito=carrito).select_related('producto')  # Productos en el carrito
     items = []
     base_total = 0.0
     for it in items_qs:
@@ -54,7 +59,7 @@ def carrito_view(request):
         })
         base_total += subtotal
 
-    descuentos_qs = carrito.descuentos.all() if carrito else Descuento.objects.none()
+    descuentos_qs = carrito.descuentos.all() if carrito else Descuento.objects.none()  # Cupones aplicados
     total_pct = descuentos_qs.aggregate(total=Sum('porcentaje'))['total'] or 0.0
     discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
 
@@ -69,6 +74,7 @@ def carrito_view(request):
         'descuentos': list(descuentos_qs),
     })
 
+# Vista para listar y crear productos
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductoListCreateView(View):
     def get(self, request):
@@ -83,6 +89,7 @@ class ProductoListCreateView(View):
         p = Producto.objects.create(nombre=nombre, imagen=imagen, precio=precio, stock=stock)
         return JsonResponse({'id': p.id})
 
+# Vista para obtener detalles o eliminar un producto
 @method_decorator(csrf_exempt, name='dispatch')
 class ProductoDetailDeleteView(View):
     def get(self, request, pk):
@@ -94,6 +101,7 @@ class ProductoDetailDeleteView(View):
         p.delete()
         return JsonResponse({'deleted': True})
 
+# Vista para listar y crear descuentos
 @method_decorator(csrf_exempt, name='dispatch')
 class DescuentoListCreateView(View):
     def get(self, request):
@@ -105,6 +113,7 @@ class DescuentoListCreateView(View):
         d = Descuento.objects.create(codigo=codigo, porcentaje=porcentaje)
         return JsonResponse({'id': d.id})
 
+# Vista para obtener detalles o eliminar un descuento
 @method_decorator(csrf_exempt, name='dispatch')
 class DescuentoDetailDeleteView(View):
     def get(self, request, pk):
@@ -116,6 +125,7 @@ class DescuentoDetailDeleteView(View):
         d.delete()
         return JsonResponse({'deleted': True})
 
+# Vista para listar y crear carritos
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoListCreateView(View):
     def get(self, request):
@@ -127,6 +137,7 @@ class CarritoListCreateView(View):
     def post(self, request):
         return HttpResponseForbidden()
 
+# Vista para actualizar un producto en el carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoItemUpdateView(View):
     @transaction.atomic
@@ -175,6 +186,7 @@ class CarritoItemUpdateView(View):
             'total': round(discounted_total, 2),
         })
 
+# Vista para obtener detalles o eliminar un carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoDetailDeleteView(View):
     def get(self, request, pk):
@@ -249,6 +261,7 @@ class CarritoDetailDeleteView(View):
             'total': round(discounted_total, 2),
         })
 
+# Vista para eliminar un producto del carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoItemDeleteView(View):
     @transaction.atomic
@@ -278,6 +291,7 @@ class CarritoItemDeleteView(View):
 
         return JsonResponse({'ok': True, 'deleted': True, 'stock_restante': producto.stock, 'total': round(discounted_total, 2)})
 
+# Vista para aplicar un cupón al carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoApplyCouponView(View):
     @transaction.atomic
@@ -372,6 +386,7 @@ class CarritoApplyCouponView(View):
             'total': round(discounted_total, 2)
         })
     
+# Vista para vaciar el carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class VaciarCarritoView(View):
     @transaction.atomic
@@ -397,6 +412,7 @@ class VaciarCarritoView(View):
 
         return JsonResponse({'ok': True, 'total': 0.0})
     
+# Vista para finalizar la compra
 @method_decorator(csrf_exempt, name='dispatch')
 class FinalizarCompraView(View):
     @transaction.atomic
@@ -415,6 +431,7 @@ class FinalizarCompraView(View):
 
         return JsonResponse({'ok': True})
     
+# Vista para quitar un cupón del carrito
 @method_decorator(csrf_exempt, name='dispatch')
 class CarritoRemoveCouponView(View):
     @transaction.atomic
