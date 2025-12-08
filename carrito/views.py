@@ -14,7 +14,6 @@ from django.db.models import Sum
 def login_view(request):
     return render(request, 'login/login.html')
 
-
 def _ensure_user_cart(user):
     carrito, _ = Carrito.objects.get_or_create(usuario=user, defaults={'precio_total': 0})
     return carrito
