@@ -14,7 +14,7 @@
         <div class="hello">
           Hola, {{ user.username }}
         </div>
-        <a class="logout-btn" href="{% url 'login' %}">Cerrar sesión</a>
+        <a class="logout-btn" href="{% url 'logout' %}">Cerrar sesión</a>
       </div>
         <div class="header">
     <h2>Lista de Productos</h2>
@@ -55,7 +55,15 @@
   <div class="promo-image">Promo</div>
   <div class="promo-text">
     <div class="title">Códigos de Descuento Vigentes</div>
-    <div class="code">Usa el código: <span>PROMO2026</span> para 10% de descuento.</div>
+    {% if descuentos %}
+      <ul class="code">
+        {% for descuento in descuentos %}
+          <li>Usa el código: <span>{{ descuento.codigo }}</span> para {{ descuento.porcentaje }}% de descuento.</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No hay códigos de descuento disponibles en este momento.</p>
+    {% endif %}
   </div>
 </div>
   <!-- Fin Zona de Promoción -->

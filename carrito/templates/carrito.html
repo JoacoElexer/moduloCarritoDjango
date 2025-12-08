@@ -94,6 +94,37 @@
   const carritoIdEl = document.getElementById('carrito-id-data');
   const carritoId = carritoIdEl ? JSON.parse(carritoIdEl.textContent) : null;
 
+  document.addEventListener('click', async (event) => {
+    if (event.target.classList.contains('coupon-remove')) {
+      const couponChip = event.target.closest('.coupon-chip');
+      const code = couponChip.dataset.code;
+
+      if (!confirm(`¿Quitar el cupón "${code}"?`)) return;
+
+      try {
+        const res = await fetch(`/carrito/${carritoId}/quitar-cupon/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: new URLSearchParams({ codigo: code }).toString()
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || `Error ${res.status}`);
+          return;
+        }
+
+        couponChip.remove();
+        document.getElementById('total-value').textContent = data.total.toFixed(2);
+      } catch (e) {
+        alert('Error al quitar el cupón.');
+      }
+    }
+  });
+
   document.querySelectorAll('.item').forEach(itemEl => {
     const itemId = itemEl.dataset.itemId;
     const qtyInput = itemEl.querySelector('.qty-input');

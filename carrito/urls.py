@@ -1,10 +1,12 @@
 from django.urls import path
+from django.contrib.auth.views import LogoutView
 from . import views
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('listaProductos/', views.ProductoListView.as_view(), name='lista_productos'),
     path('carritoView/', views.carrito_view, name='carrito_view'),
+    path('logout/', LogoutView.as_view(), name='logout'),
 
     path('producto/', views.ProductoListCreateView.as_view()),
     path('producto/<int:pk>/', views.ProductoDetailDeleteView.as_view()),
@@ -17,4 +19,5 @@ urlpatterns = [
     path('carrito/<int:pk>/aplicar-cupon/', views.CarritoApplyCouponView.as_view(), name='aplicar_cupon'),
     path('carrito/<int:pk>/vaciar/', views.VaciarCarritoView.as_view(), name='vaciar_carrito'),
     path('carrito/<int:pk>/finalizar/', views.FinalizarCompraView.as_view(), name='finalizar_compra'),
+    path('carrito/<int:pk>/quitar-cupon/', views.CarritoRemoveCouponView.as_view(), name='quitar_cupon'),
 ]

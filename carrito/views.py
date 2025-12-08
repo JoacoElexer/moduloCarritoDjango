@@ -29,6 +29,8 @@ class ProductoListView(LoginRequiredMixin, ListView):
         ctx['carrito_id'] = carrito.id
         cart_count = carrito.items.aggregate(total=Sum('cantidad'))['total'] or 0
         ctx['cart_count'] = cart_count
+        applied_coupons = carrito.descuentos.values_list('id', flat=True)
+        ctx['descuentos'] = Descuento.objects.exclude(id__in=applied_coupons)
         return ctx
 
 @login_required
@@ -405,3 +407,29 @@ class FinalizarCompraView(View):
         carrito.save(update_fields=['precio_total'])
 
         return JsonResponse({'ok': True})
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class CarritoRemoveCouponView(View):
+    @transaction.atomic
+    def post(self, request, pk):
+        carrito = get_object_or_404(Carrito, pk=pk, usuario=request.user)
+        codigo = request.POST.get('codigo')
+
+        if not codigo:
+            return JsonResponse({'error': 'Código de cupón no proporcionado.'}, status=400)
+
+        descuento = carrito.descuentos.filter(codigo=codigo).first()
+        if not descuento:
+            return JsonResponse({'error': 'Cupón no encontrado en el carrito.'}, status=404)
+
+        carrito.descuentos.remove(descuento)
+
+        # Recalcular el total
+        base_total = sum(item.producto.precio * item.cantidad for item in carrito.items.all())
+        total_pct = carrito.descuentos.aggregate(total=Sum('porcentaje'))['total'] or 0.0
+        discounted_total = max(0.0, base_total * (1 - float(total_pct) / 100.0))
+
+        carrito.precio_total = discounted_total
+        carrito.save(update_fields=['precio_total'])
+
+        return JsonResponse({'total': discounted_total})
