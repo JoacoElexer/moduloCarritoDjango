@@ -10,18 +10,10 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
-from django.contrib.auth import logout
-from django.shortcuts import redirect
 
 def login_view(request):
     return render(request, 'login/login.html')
 
-
-@require_http_methods(["GET", "POST"])
-def logout_view(request):
-    """Cerrar sesión del usuario y redirigir a la página de inicio de sesión."""
-    logout(request)
-    return redirect('login')
 
 def _ensure_user_cart(user):
     carrito, _ = Carrito.objects.get_or_create(usuario=user, defaults={'precio_total': 0})

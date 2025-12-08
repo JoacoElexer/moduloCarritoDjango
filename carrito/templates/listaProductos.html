@@ -14,7 +14,10 @@
         <div class="hello">
           Hola, {{ user.username }}
         </div>
-        <a class="logout-btn" href="{% url 'logout' %}">Cerrar sesión</a>
+        <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="logout-btn">Cerrar sesión</button>
+        </form>
       </div>
         <div class="header">
     <h2>Lista de Productos</h2>
