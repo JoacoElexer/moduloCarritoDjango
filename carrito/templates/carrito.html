@@ -28,7 +28,7 @@
                 <div class="meta">
                   Precio: $ <span class="price">{{ it.precio }}</span> •
                   Cantidad:
-                  <input type="number" class="qty-input" min="1" value="{{ it.cantidad }}" style="width:70px;">
+                  <input type="number" class="qty-input" min="1" max="{{ it.stock_restante }}" value="{{ it.cantidad }}" style="width:70px;">
                   <button type="button" class="remove-btn" title="Quitar del carrito" aria-label="Quitar del carrito">🗑️</button>
                 </div>
               </div>
@@ -94,37 +94,6 @@
   const carritoIdEl = document.getElementById('carrito-id-data');
   const carritoId = carritoIdEl ? JSON.parse(carritoIdEl.textContent) : null;
 
-  document.addEventListener('click', async (event) => {
-    if (event.target.classList.contains('coupon-remove')) {
-      const couponChip = event.target.closest('.coupon-chip');
-      const code = couponChip.dataset.code;
-
-      if (!confirm(`¿Quitar el cupón "${code}"?`)) return;
-
-      try {
-        const res = await fetch(`/carrito/${carritoId}/quitar-cupon/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          body: new URLSearchParams({ codigo: code }).toString()
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || `Error ${res.status}`);
-          return;
-        }
-
-        couponChip.remove();
-        document.getElementById('total-value').textContent = data.total.toFixed(2);
-      } catch (e) {
-        alert('Error al quitar el cupón.');
-      }
-    }
-  });
-
   document.querySelectorAll('.item').forEach(itemEl => {
     const itemId = itemEl.dataset.itemId;
     const qtyInput = itemEl.querySelector('.qty-input');
@@ -133,10 +102,16 @@
 
     async function updateQuantityOnServer(value) {
       let nuevaCantidad = parseInt(value, 10);
+      const maxStock = parseInt(qtyInput.getAttribute('max'), 10); // Obtener el stock máximo dinámico
+
       if (!Number.isFinite(nuevaCantidad) || nuevaCantidad < 1) {
-        nuevaCantidad = 1;
+        nuevaCantidad = 1; // Ajustar al mínimo permitido
       }
-      qtyInput.value = String(nuevaCantidad);
+      if (nuevaCantidad > maxStock) {
+        alert(`No puedes agregar más de ${maxStock} unidades de este producto.`);
+        nuevaCantidad = maxStock; // Ajustar al máximo permitido
+      }
+      qtyInput.value = String(nuevaCantidad); // Actualizar el valor en el campo de entrada
 
       try {
         const formData = new URLSearchParams();
@@ -162,7 +137,19 @@
     }
 
     qtyInput.addEventListener('change', () => {
-      updateQuantityOnServer(qtyInput.value);
+      let value = parseInt(qtyInput.value, 10);
+      const maxStock = parseInt(qtyInput.getAttribute('max'), 10); // Obtener el stock máximo dinámico
+
+      if (!Number.isFinite(value) || value < 1) {
+        value = 1; 
+      }
+      if (value > maxStock) {
+        alert(`No puedes agregar más de ${maxStock} unidades de este producto.`);
+        value = maxStock; 
+      }
+
+      qtyInput.value = value;
+      updateQuantityOnServer(value);
     });
 
     removeBtn.addEventListener('click', async () => {

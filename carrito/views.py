@@ -10,9 +10,16 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
+from django.contrib.auth import logout
+from django.shortcuts import redirect
 
 def login_view(request):
     return render(request, 'login/login.html')
+
+def logout_view(request):
+    """Cerrar sesión del usuario y redirigir a la página de inicio de sesión."""
+    logout(request)
+    return redirect('login')
 
 def _ensure_user_cart(user):
     carrito, _ = Carrito.objects.get_or_create(usuario=user, defaults={'precio_total': 0})
@@ -41,6 +48,8 @@ def carrito_view(request):
     base_total = 0.0
     for it in items_qs:
         subtotal = it.producto.precio * it.cantidad
+        # Calcular el stock restante dinámicamente
+        stock_restante = it.producto.stock + it.cantidad
         items.append({
             'id': it.id,
             'nombre': it.producto.nombre,
@@ -48,6 +57,7 @@ def carrito_view(request):
             'precio': it.producto.precio,
             'cantidad': it.cantidad,
             'subtotal': subtotal,
+            'stock_restante': stock_restante,  # Enviar el stock restante al frontend
         })
         base_total += subtotal
 
@@ -385,10 +395,14 @@ class VaciarCarritoView(View):
             item.producto.save(update_fields=['stock'])
         CarritoProducto.objects.filter(carrito=carrito).delete()
 
+        # Eliminar los descuentos aplicados
+        carrito.descuentos.clear()
+
+        # Actualizar el total del carrito
         carrito.precio_total = 0.0
         carrito.save(update_fields=['precio_total'])
 
-        return JsonResponse({'ok': True})
+        return JsonResponse({'ok': True, 'total': 0.0})
     
 @method_decorator(csrf_exempt, name='dispatch')
 class FinalizarCompraView(View):
