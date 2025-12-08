@@ -31,5 +31,8 @@ Proyecto Django con autenticación y un carrito único por usuario, listado de p
 - Usuario: `admin`
 - Contraseña: `admin`
 
+- Usuario: `abraham`
+- Contraseña: `lol`
+
 Crear un superusuario:
 python manage.py createsuperuser
