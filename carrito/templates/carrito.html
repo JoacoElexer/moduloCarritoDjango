@@ -29,8 +29,7 @@
                   Precio: $ <span class="price">{{ it.precio }}</span> •
                   Cantidad:
                   <input type="number" class="qty-input" min="1" value="{{ it.cantidad }}" style="width:70px;">
-                  <button type="button" class="update-btn">Actualizar</button>
-                  <button type="button" class="remove-btn">Quitar</button>
+                  <button type="button" class="remove-btn" title="Quitar del carrito" aria-label="Quitar del carrito">🗑️</button>
                 </div>
               </div>
               <div class="subtotal">
@@ -41,12 +40,12 @@
         </div>
 
         <div class="coupon-section">
-            <h3 style="margin: 0 0 8px; font-size: 16px; color: var(--text);">Sección Cupón</h3>
-            <div class="add-row">
-              <input type="text" class="coupon-input" placeholder="Ingresa tu código" aria-label="Código de descuento">
-              <button type="button" class="coupon-btn">Aplicar</button>
-            </div>
-            <p class="coupon-msg" aria-live="polite"></p>
+          <h3 style="margin: 0 0 8px; font-size: 16px; color: var(--text);">Sección Cupón</h3>
+          <div class="add-row">
+            <input type="text" class="coupon-input" placeholder="Ingresa tu código" aria-label="Código de descuento">
+            <button type="button" class="coupon-btn">Aplicar</button>
+          </div>
+          <p class="coupon-msg" aria-live="polite"></p>
         </div>
 
         <div class="summary">
@@ -72,6 +71,10 @@
               <h4>Total</h4>
               <div class="total">$ <span id="total-value">{{ total|floatformat:2 }}</span></div>
             </div>
+            <div class="summary-actions">
+              <button id="empty-cart-btn" class="action-btn danger">Vaciar Carrito</button>
+              <button id="checkout-btn" class="action-btn success">Finalizar Compra</button>
+            </div>
           </div>
         </div>
       {% else %}
@@ -88,159 +91,53 @@
   {% endif %}
 
   <script>
-    const carritoIdEl = document.getElementById('carrito-id-data');
-    const carritoId = carritoIdEl ? JSON.parse(carritoIdEl.textContent) : null;
+  const carritoIdEl = document.getElementById('carrito-id-data');
+  const carritoId = carritoIdEl ? JSON.parse(carritoIdEl.textContent) : null;
 
-    function format2(n) { return Number(n).toFixed(2); }
+  document.querySelectorAll('.item').forEach(itemEl => {
+    const itemId = itemEl.dataset.itemId;
+    const qtyInput = itemEl.querySelector('.qty-input');
+    const removeBtn = itemEl.querySelector('.remove-btn');
+    const subtotalEl = itemEl.querySelector('.subtotal-value');
 
-    document.querySelectorAll('.item').forEach(itemEl => {
-      const itemId = itemEl.dataset.itemId;
-      const qtyInput = itemEl.querySelector('.qty-input');
-      const updateBtn = itemEl.querySelector('.update-btn');
-      const removeBtn = itemEl.querySelector('.remove-btn');
-      const subtotalEl = itemEl.querySelector('.subtotal-value');
+    async function updateQuantityOnServer(value) {
+      let nuevaCantidad = parseInt(value, 10);
+      if (!Number.isFinite(nuevaCantidad) || nuevaCantidad < 1) {
+        nuevaCantidad = 1;
+      }
+      qtyInput.value = String(nuevaCantidad);
 
-      updateBtn.addEventListener('click', async () => {
-        const nuevaCantidad = parseInt(qtyInput.value, 10);
-        if (!Number.isFinite(nuevaCantidad) || nuevaCantidad < 1) {
-          alert('Cantidad inválida (>=1). Para quitar usa "Quitar".');
+      try {
+        const formData = new URLSearchParams();
+        formData.append('cantidad', String(nuevaCantidad));
+        const res = await fetch(`/carrito/${carritoId}/item/${itemId}/update/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: formData.toString()
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || `Error ${res.status}`);
           return;
         }
-        try {
-          const formData = new URLSearchParams();
-          formData.append('cantidad', String(nuevaCantidad));
-          const res = await fetch(`/carrito/${carritoId}/item/${itemId}/update/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData.toString()
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            alert(data.error || `Error ${res.status}`);
-            return;
-          }
-          qtyInput.value = data.cantidad;
-          subtotalEl.textContent = format2(data.subtotal);
-          document.getElementById('total-value').textContent = format2(data.total);
-        } catch (e) {
-          alert('Error al actualizar cantidad.');
-        }
-      });
+        subtotalEl.textContent = data.subtotal.toFixed(2);
+        document.getElementById('total-value').textContent = data.total.toFixed(2);
+      } catch (e) {
+        alert('Error al actualizar cantidad.');
+      }
+    }
 
-      removeBtn.addEventListener('click', async () => {
-        if (!confirm('¿Quitar este producto del carrito?')) return;
-        try {
-          const res = await fetch(`/carrito/${carritoId}/item/${itemId}/delete/`, {
-            method: 'DELETE',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            alert(data.error || `Error ${res.status}`);
-            return;
-          }
-          itemEl.remove();
-          document.getElementById('total-value').textContent = format2(data.total);
-          const itemsLeft = document.querySelectorAll('.item').length;
-          if (itemsLeft === 0) {
-            location.reload();
-          }
-        } catch (e) {
-          alert('Error al quitar el producto.');
-        }
-      });
+    qtyInput.addEventListener('change', () => {
+      updateQuantityOnServer(qtyInput.value);
     });
 
-    const couponInput = document.querySelector('.coupon-input');
-    const couponBtn = document.querySelector('.coupon-btn');
-    const couponMsg = document.querySelector('.coupon-msg');
-    const totalEl = document.getElementById('total-value');
-    const appliedCouponsEl = document.getElementById('applied-coupons');
-
-    // Apply coupon
-    if (couponBtn) {
-      couponBtn.addEventListener('click', async () => {
-        const code = (couponInput?.value || '').trim();
-        if (!code) {
-          couponMsg.textContent = 'Ingresa un código.';
-          couponMsg.classList.remove('msg-ok');
-          couponMsg.classList.add('msg-error');
-          return;
-        }
-        try {
-          const formData = new URLSearchParams();
-          formData.append('codigo', code);
-          const res = await fetch(`/carrito/${carritoId}/aplicar-cupon/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData.toString()
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            couponMsg.textContent = data.error || `Error ${res.status}`;
-            couponMsg.classList.remove('msg-ok');
-            couponMsg.classList.add('msg-error');
-            return;
-          }
-          renderCouponChips(data.descuentos);
-          totalEl.textContent = format2(data.total);
-          couponMsg.textContent = `Descuento ${data.aplicado.porcentaje}% aplicado (${data.aplicado.codigo})`;
-          couponMsg.classList.remove('msg-error');
-          couponMsg.classList.add('msg-ok');
-          couponInput.value = '';
-        } catch (e) {
-          couponMsg.textContent = 'Error al aplicar el código.';
-          couponMsg.classList.remove('msg-ok');
-          couponMsg.classList.add('msg-error');
-        }
-      });
-    }
-
-    function renderCouponChips(descs) {
-      appliedCouponsEl.innerHTML = '';
-      if (!Array.isArray(descs) || descs.length === 0) {
-        const span = document.createElement('span');
-        span.style.color = '#9aa4b2';
-        span.textContent = 'Sin cupones aplicados';
-        appliedCouponsEl.appendChild(span);
-        return;
-      }
-      descs.forEach(d => {
-        const chip = document.createElement('span');
-        chip.className = 'coupon-chip';
-        chip.dataset.code = d.codigo;
-        chip.style.cssText = 'background:#2a2f3a;color:#fff;padding:4px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:6px;';
-
-        const codeEl = document.createElement('span');
-        codeEl.className = 'chip-code';
-        codeEl.textContent = d.codigo;
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'coupon-remove';
-        btn.setAttribute('aria-label', `Quitar cupón ${d.codigo}`);
-        btn.textContent = '✖';
-        btn.style.cssText = 'background:#444;color:#fff;border:none;border-radius:8px;cursor:pointer;padding:2px 6px;';
-        btn.addEventListener('click', () => removeCoupon(d.codigo));
-
-        chip.appendChild(codeEl);
-        chip.appendChild(btn);
-        appliedCouponsEl.appendChild(chip);
-      });
-    }
-
-    async function removeCoupon(code) {
-      if (!code) return;
+    removeBtn.addEventListener('click', async () => {
+      if (!confirm('¿Quitar este producto del carrito?')) return;
       try {
-        const res = await fetch(`/carrito/${carritoId}/aplicar-cupon/?codigo=${encodeURIComponent(code)}`, {
+        const res = await fetch(`/carrito/${carritoId}/item/${itemId}/delete/`, {
           method: 'DELETE',
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
@@ -249,18 +146,61 @@
           alert(data.error || `Error ${res.status}`);
           return;
         }
-        renderCouponChips(data.descuentos);
-        totalEl.textContent = format2(data.total);
+        itemEl.remove();
+        document.getElementById('total-value').textContent = data.total.toFixed(2);
       } catch (e) {
-        alert('Error al quitar el cupón.');
+        alert('Error al quitar el producto.');
       }
-    }
-
-    // Attach remove handlers for server-rendered chips
-    document.querySelectorAll('.coupon-chip .coupon-remove').forEach(btn => {
-      const code = btn.closest('.coupon-chip')?.dataset?.code;
-      btn.addEventListener('click', () => removeCoupon(code));
     });
+  });
+
+  document.getElementById('empty-cart-btn').addEventListener('click', async () => {
+    if (!confirm('¿Estás seguro de que deseas vaciar el carrito?')) return;
+    try {
+      const res = await fetch(`/carrito/${carritoId}/vaciar/`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      if (res.ok) location.reload();
+    } catch (e) {
+      alert('Error al vaciar el carrito.');
+    }
+  });
+
+  document.querySelector('.coupon-btn').addEventListener('click', async () => {
+    const couponInput = document.querySelector('.coupon-input');
+    const appliedCoupons = document.getElementById('applied-coupons');
+    const code = couponInput.value.trim();
+    if (!code) {
+      alert('Por favor, ingresa un código de cupón.');
+      return;
+    }
+    try {
+      const res = await fetch(`/carrito/${carritoId}/aplicar-cupon/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({ codigo: code }).toString()
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || `Error ${res.status}`);
+        return;
+      }
+      couponInput.value = '';
+      appliedCoupons.innerHTML = data.descuentos.map(d => `
+        <span class="coupon-chip" data-code="${d.codigo}">
+          <span class="chip-code">${d.codigo}</span>
+          <button type="button" class="coupon-remove">✖</button>
+        </span>
+      `).join('');
+      document.getElementById('total-value').textContent = data.total.toFixed(2);
+    } catch (e) {
+      alert('Error al aplicar el cupón.');
+    }
+  });
   </script>
 </body>
 </html>

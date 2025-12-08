@@ -202,3 +202,54 @@ h2 {
 .remove-btn:hover {
   background: #4a2f2f;
 }
+
+.summary-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.action-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  color: #fff;
+}
+
+.action-btn.danger {
+  background-color: #4a2f2f;
+}
+
+.action-btn.danger:hover {
+  background-color: #4a2f2f;
+}
+
+.action-btn.success {
+  background-color: #5cb85c;
+}
+
+.action-btn.success:hover {
+  background-color: #4cae4c;
+}
+
+/* Estilo para la "X" de los cupones aplicados */
+.coupon-chip .coupon-remove {
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.coupon-chip .coupon-remove:hover {
+  background: #ff6961;
+}

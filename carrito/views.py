@@ -133,25 +133,21 @@ class CarritoItemUpdateView(View):
             return HttpResponseForbidden()
 
         try:
-            nueva_cantidad = int(request.POST.get('cantidad', '').strip())
+            nueva_cantidad = int(request.POST.get('cantidad', 1))
         except (TypeError, ValueError):
             return JsonResponse({'error': 'Cantidad inválida'}, status=400)
 
         item = get_object_or_404(CarritoProducto.objects.select_for_update(), pk=item_id, carrito=carrito)
         producto = Producto.objects.select_for_update().get(pk=item.producto_id)
 
+        # Verificar que la nueva cantidad no exceda el stock disponible
+        if nueva_cantidad > item.cantidad + producto.stock:
+            nueva_cantidad = item.cantidad + producto.stock
+
         if nueva_cantidad < 1:
-            producto.stock += item.cantidad
-            producto.save(update_fields=['stock'])
             item.delete()
         else:
-            delta = nueva_cantidad - item.cantidad
-            if delta > 0:
-                if producto.stock < delta:
-                    return JsonResponse({'error': 'Stock insuficiente', 'stock_disponible': producto.stock}, status=400)
-                producto.stock -= delta
-            elif delta < 0:
-                producto.stock += (-delta)
+            producto.stock += item.cantidad - nueva_cantidad
             producto.save(update_fields=['stock'])
             item.cantidad = nueva_cantidad
             item.save(update_fields=['cantidad'])
@@ -168,9 +164,9 @@ class CarritoItemUpdateView(View):
         return JsonResponse({
             'ok': True,
             'item_id': item.id,
-            'cantidad': item.cantidad if nueva_cantidad >= 1 else 0,
+            'cantidad': item.cantidad,
             'stock_restante': producto.stock,
-            'subtotal': round(producto.precio * (item.cantidad if nueva_cantidad >= 1 else 0), 2),
+            'subtotal': round(producto.precio * item.cantidad, 2),
             'total': round(discounted_total, 2),
         })
 
@@ -370,3 +366,42 @@ class CarritoApplyCouponView(View):
             'base_total': round(base_total, 2),
             'total': round(discounted_total, 2)
         })
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class VaciarCarritoView(View):
+    @transaction.atomic
+    def post(self, request, pk):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        # Regresar los productos al stock
+        for item in CarritoProducto.objects.filter(carrito=carrito).select_related('producto'):
+            item.producto.stock += item.cantidad
+            item.producto.save(update_fields=['stock'])
+        CarritoProducto.objects.filter(carrito=carrito).delete()
+
+        carrito.precio_total = 0.0
+        carrito.save(update_fields=['precio_total'])
+
+        return JsonResponse({'ok': True})
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class FinalizarCompraView(View):
+    @transaction.atomic
+    def post(self, request, pk):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden()
+        carrito = get_object_or_404(Carrito, pk=pk)
+        if carrito.usuario != request.user:
+            return HttpResponseForbidden()
+
+        # Eliminar los productos del carrito sin regresar al stock
+        CarritoProducto.objects.filter(carrito=carrito).delete()
+
+        carrito.precio_total = 0.0
+        carrito.save(update_fields=['precio_total'])
+
+        return JsonResponse({'ok': True})
