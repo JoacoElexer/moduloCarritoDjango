@@ -16,6 +16,8 @@ from django.shortcuts import redirect
 def login_view(request):
     return render(request, 'login/login.html')
 
+
+@require_http_methods(["GET", "POST"])
 def logout_view(request):
     """Cerrar sesión del usuario y redirigir a la página de inicio de sesión."""
     logout(request)

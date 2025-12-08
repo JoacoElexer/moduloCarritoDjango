@@ -219,6 +219,40 @@
       alert('Error al aplicar el cupón.');
     }
   });
+
+  document.querySelectorAll('.coupon-remove').forEach(removeBtn => {
+  removeBtn.addEventListener('click', async () => {
+    const couponChip = removeBtn.closest('.coupon-chip');
+    const couponCode = couponChip.dataset.code;
+
+    if (!confirm(`¿Quitar el cupón ${couponCode}?`)) return;
+
+    try {
+      const res = await fetch(`/carrito/${carritoId}/quitar-cupon/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({ codigo: couponCode }).toString()
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || `Error ${res.status}`);
+        return;
+      }
+
+      // Eliminar el cupón del DOM
+      couponChip.remove();
+
+      // Actualizar el total
+      document.getElementById('total-value').textContent = data.total.toFixed(2);
+    } catch (e) {
+      alert('Error al quitar el cupón.');
+    }
+  });
+});
   </script>
 </body>
 </html>
